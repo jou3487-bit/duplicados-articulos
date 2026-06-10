@@ -39,7 +39,7 @@ jobs:
           if r.status_code != 200:
               print(f"❌ Error Oracle: {r.status_code} - {r.text[:200]}")
               sys.exit(1)
-          with open("oracle_fusion.xlsx", "wb") as f:
+          with open("base_principal.xlsx", "wb") as f:
               f.write(r.content)
           print(f"   ✅ Oracle: {len(r.content):,} bytes")
 
@@ -48,7 +48,7 @@ jobs:
           if r.status_code != 200:
               print(f"❌ Error Externo: {r.status_code} - {r.text[:200]}")
               sys.exit(1)
-          with open("erp_externo.xlsx", "wb") as f:
+          with open("base_comparar.xlsx", "wb") as f:
               f.write(r.content)
           print(f"   ✅ Externo: {len(r.content):,} bytes")
           EOF
@@ -68,7 +68,7 @@ jobs:
               "Authorization": f"Bearer {os.environ['SP_TOKEN']}",
               "Content-Type": "application/octet-stream"
           }
-          with open("posibles_duplicados.xlsx", "rb") as f:
+          with open("resultado_comparacion.xlsx", "rb") as f:
               r = requests.put(os.environ['SP_UPLOAD_URL'], headers=headers, data=f)
 
           if r.status_code in [200, 201]:
