@@ -120,10 +120,10 @@ def calcular_score_final(score_base, row_ext, row_ora):
 
 # ── Cargar archivos ─────────────────────────────────────────────
 print("📂 Cargando archivos...")
-df_oracle  = pd.read_excel("oracle_fusion.xlsx")
+df_oracle  = pd.read_excel("base_principal.xlsx")
 df_oracle  = df_oracle[['CODIGO', 'DESCRIPCION', 'UNIDAD']]
 
-df_externo = pd.read_excel("erp_externo.xlsx", header=None)
+df_externo = pd.read_excel("base_comparar.xlsx", header=None)
 df_externo.columns = ['CODIGO', 'DESCRIPCION', 'UNIDAD']
 
 print(f"   Oracle:  {len(df_oracle):,} artículos")
@@ -185,7 +185,7 @@ df_resultado = pd.DataFrame(resultados).sort_values('SCORE_FINAL', ascending=Fal
 
 # ── Guardar resultado ───────────────────────────────────────────
 print("\n💾 Guardando resultado...")
-with pd.ExcelWriter("posibles_duplicados.xlsx", engine='openpyxl') as writer:
+with pd.ExcelWriter("resultado_comparacion.xlsx", engine='openpyxl') as writer:
     df_resultado.to_excel(writer, index=False, sheet_name='Duplicados')
     resumen = pd.DataFrame({
         'Métrica': [
