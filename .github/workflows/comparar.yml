@@ -1,0 +1,79 @@
+name: Comparar Articulos Duplicados
+
+on:
+  repository_dispatch:
+    types: [ejecutar-comparacion]
+  workflow_dispatch:  # permite ejecutar manualmente desde GitHub también
+
+jobs:
+  comparar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v3
+
+      - name: Instalar Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install rapidfuzz openpyxl pandas requests
+
+      - name: Descargar archivos de SharePoint
+        env:
+          ORACLE_URL:  ${{ github.event.client_payload.oracle_url }}
+          EXTERNO_URL: ${{ github.event.client_payload.externo_url }}
+          SP_TOKEN:    ${{ secrets.SP_TOKEN }}
+        run: |
+          python - <<'EOF'
+          import requests, os, sys
+
+          token = os.environ.get('SP_TOKEN', '')
+          headers = {"Authorization": f"Bearer {token}"}
+
+          print("📥 Descargando Oracle...")
+          r = requests.get(os.environ['ORACLE_URL'], headers=headers)
+          if r.status_code != 200:
+              print(f"❌ Error Oracle: {r.status_code} - {r.text[:200]}")
+              sys.exit(1)
+          with open("oracle_fusion.xlsx", "wb") as f:
+              f.write(r.content)
+          print(f"   ✅ Oracle: {len(r.content):,} bytes")
+
+          print("📥 Descargando Externo...")
+          r = requests.get(os.environ['EXTERNO_URL'], headers=headers)
+          if r.status_code != 200:
+              print(f"❌ Error Externo: {r.status_code} - {r.text[:200]}")
+              sys.exit(1)
+          with open("erp_externo.xlsx", "wb") as f:
+              f.write(r.content)
+          print(f"   ✅ Externo: {len(r.content):,} bytes")
+          EOF
+
+      - name: Ejecutar comparación
+        run: python comparar.py
+
+      - name: Subir resultado a SharePoint
+        env:
+          SP_TOKEN:      ${{ secrets.SP_TOKEN }}
+          SP_UPLOAD_URL: ${{ secrets.SP_UPLOAD_URL }}
+        run: |
+          python - <<'EOF'
+          import requests, os, sys
+
+          headers = {
+              "Authorization": f"Bearer {os.environ['SP_TOKEN']}",
+              "Content-Type": "application/octet-stream"
+          }
+          with open("posibles_duplicados.xlsx", "rb") as f:
+              r = requests.put(os.environ['SP_UPLOAD_URL'], headers=headers, data=f)
+
+          if r.status_code in [200, 201]:
+              print(f"✅ Resultado subido correctamente")
+          else:
+              print(f"❌ Error al subir: {r.status_code} - {r.text[:200]}")
+              sys.exit(1)
+          EOF
