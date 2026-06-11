@@ -20,33 +20,74 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependencias
-        run: pip install rapidfuzz openpyxl pandas requests Office365-REST-Python-Client
+        run: pip install rapidfuzz openpyxl pandas requests msal
 
       - name: Descargar archivos de SharePoint
         env:
-          SP_USER: ${{ secrets.SP_USER }}
-          SP_PASS: ${{ secrets.SP_PASS }}
+          AZURE_TENANT_ID:     ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID:     ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
           python - <<'EOF'
-          import os
-          from office365.sharepoint.client_context import ClientContext
-          from office365.runtime.auth.user_credential import UserCredential
+          import os, requests, msal
 
-          site_url = "https://numar.sharepoint.com/sites/PRODUCTHUB"
-          ctx = ClientContext(site_url).with_credentials(
-              UserCredential(os.environ['SP_USER'], os.environ['SP_PASS'])
+          tenant_id     = os.environ['AZURE_TENANT_ID']
+          client_id     = os.environ['AZURE_CLIENT_ID']
+          client_secret = os.environ['AZURE_CLIENT_SECRET']
+
+          # Obtener token
+          app = msal.ConfidentialClientApplication(
+              client_id,
+              authority=f"https://login.microsoftonline.com/{tenant_id}",
+              client_credential=client_secret
           )
+          token = app.acquire_token_for_client(
+              scopes=["https://graph.microsoft.com/.default"]
+          )
+          if "access_token" not in token:
+              print(f"❌ Error token: {token.get('error_description')}")
+              exit(1)
+
+          headers = {"Authorization": f"Bearer {token['access_token']}"}
+
+          # IDs del sitio y archivos via Graph API
+          site_id    = "numar.sharepoint.com,/sites/PRODUCTHUB"
+          base_url   = "https://graph.microsoft.com/v1.0"
 
           archivos = {
-              "/sites/PRODUCTHUB/Shared Documents/base_principal.xlsx": "base_principal.xlsx",
-              "/sites/PRODUCTHUB/Shared Documents/base_comparar.xlsx": "base_comparar.xlsx"
+              "base_principal.xlsx": "base_principal.xlsx",
+              "base_comparar.xlsx":  "base_comparar.xlsx"
           }
 
-          for ruta_sp, nombre_local in archivos.items():
+          # Obtener el site ID real
+          r = requests.get(
+              f"{base_url}/sites/numar.sharepoint.com:/sites/PRODUCTHUB",
+              headers=headers
+          )
+          site_data = r.json()
+          site_id   = site_data['id']
+          print(f"✅ Site ID: {site_id}")
+
+          # Obtener drive ID
+          r = requests.get(f"{base_url}/sites/{site_id}/drives", headers=headers)
+          drives    = r.json()['value']
+          drive_id  = drives[0]['id']
+          print(f"✅ Drive ID: {drive_id}")
+
+          # Descargar archivos
+          for nombre_sp, nombre_local in archivos.items():
               print(f"📥 Descargando {nombre_local}...")
-              with open(nombre_local, "wb") as f:
-                  ctx.web.get_file_by_server_relative_url(ruta_sp).download(f).execute_query()
-              print(f"   ✅ {nombre_local} descargado")
+              r = requests.get(
+                  f"{base_url}/drives/{drive_id}/root:/{nombre_sp}:/content",
+                  headers=headers
+              )
+              if r.status_code == 200:
+                  with open(nombre_local, "wb") as f:
+                      f.write(r.content)
+                  print(f"   ✅ {nombre_local} descargado ({len(r.content):,} bytes)")
+              else:
+                  print(f"   ❌ Error {r.status_code}: {r.text[:200]}")
+                  exit(1)
           EOF
 
       - name: Ejecutar comparación
@@ -54,25 +95,50 @@ jobs:
 
       - name: Subir resultado a SharePoint
         env:
-          SP_USER: ${{ secrets.SP_USER }}
-          SP_PASS: ${{ secrets.SP_PASS }}
+          AZURE_TENANT_ID:     ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID:     ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
           python - <<'EOF'
-          import os
-          from office365.sharepoint.client_context import ClientContext
-          from office365.runtime.auth.user_credential import UserCredential
+          import os, requests, msal
 
-          site_url = "https://numar.sharepoint.com/sites/PRODUCTHUB"
-          ctx = ClientContext(site_url).with_credentials(
-              UserCredential(os.environ['SP_USER'], os.environ['SP_PASS'])
+          tenant_id     = os.environ['AZURE_TENANT_ID']
+          client_id     = os.environ['AZURE_CLIENT_ID']
+          client_secret = os.environ['AZURE_CLIENT_SECRET']
+
+          app = msal.ConfidentialClientApplication(
+              client_id,
+              authority=f"https://login.microsoftonline.com/{tenant_id}",
+              client_credential=client_secret
           )
+          token = app.acquire_token_for_client(
+              scopes=["https://graph.microsoft.com/.default"]
+          )
+          headers = {"Authorization": f"Bearer {token['access_token']}"}
+          base_url = "https://graph.microsoft.com/v1.0"
 
-          ruta_destino = "/sites/PRODUCTHUB/Shared Documents/resultado_comparacion.xlsx"
-          
+          # Obtener site y drive
+          r        = requests.get(
+              f"{base_url}/sites/numar.sharepoint.com:/sites/PRODUCTHUB",
+              headers=headers
+          )
+          site_id  = r.json()['id']
+          r        = requests.get(f"{base_url}/sites/{site_id}/drives", headers=headers)
+          drive_id = r.json()['value'][0]['id']
+
+          # Subir resultado
+          print("📤 Subiendo resultado_comparacion.xlsx...")
           with open("resultado_comparacion.xlsx", "rb") as f:
-              ctx.web.get_folder_by_server_relative_url(
-                  "/sites/PRODUCTHUB/Shared Documents"
-              ).upload_file("resultado_comparacion.xlsx", f.read()).execute_query()
+              contenido = f.read()
 
-          print("✅ resultado_comparacion.xlsx subido a SharePoint")
+          r = requests.put(
+              f"{base_url}/drives/{drive_id}/root:/resultado_comparacion.xlsx:/content",
+              headers={**headers, "Content-Type": "application/octet-stream"},
+              data=contenido
+          )
+          if r.status_code in [200, 201]:
+              print("✅ Archivo subido correctamente a SharePoint")
+          else:
+              print(f"❌ Error {r.status_code}: {r.text[:200]}")
+              exit(1)
           EOF
