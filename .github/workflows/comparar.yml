@@ -3,7 +3,7 @@ name: Comparar Articulos Duplicados
 on:
   repository_dispatch:
     types: [ejecutar-comparacion]
-  workflow_dispatch:  # permite ejecutar manualmente desde GitHub también
+  workflow_dispatch:
 
 jobs:
   comparar:
@@ -20,37 +20,33 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependencias
-        run: pip install rapidfuzz openpyxl pandas requests
+        run: pip install rapidfuzz openpyxl pandas requests Office365-REST-Python-Client
 
       - name: Descargar archivos de SharePoint
         env:
-          ORACLE_URL:  ${{ github.event.client_payload.oracle_url }}
-          EXTERNO_URL: ${{ github.event.client_payload.externo_url }}
-          SP_TOKEN:    ${{ secrets.SP_TOKEN }}
+          SP_USER: ${{ secrets.SP_USER }}
+          SP_PASS: ${{ secrets.SP_PASS }}
         run: |
           python - <<'EOF'
-          import requests, os, sys
+          import os
+          from office365.sharepoint.client_context import ClientContext
+          from office365.runtime.auth.user_credential import UserCredential
 
-          token = os.environ.get('SP_TOKEN', '')
-          headers = {"Authorization": f"Bearer {token}"}
+          site_url = "https://numar.sharepoint.com/sites/PRODUCTHUB"
+          ctx = ClientContext(site_url).with_credentials(
+              UserCredential(os.environ['SP_USER'], os.environ['SP_PASS'])
+          )
 
-          print("📥 Descargando Oracle...")
-          r = requests.get(os.environ['ORACLE_URL'], headers=headers)
-          if r.status_code != 200:
-              print(f"❌ Error Oracle: {r.status_code} - {r.text[:200]}")
-              sys.exit(1)
-          with open("base_principal.xlsx", "wb") as f:
-              f.write(r.content)
-          print(f"   ✅ Oracle: {len(r.content):,} bytes")
+          archivos = {
+              "/sites/PRODUCTHUB/Shared Documents/base_principal.xlsx": "base_principal.xlsx",
+              "/sites/PRODUCTHUB/Shared Documents/base_comparar.xlsx": "base_comparar.xlsx"
+          }
 
-          print("📥 Descargando Externo...")
-          r = requests.get(os.environ['EXTERNO_URL'], headers=headers)
-          if r.status_code != 200:
-              print(f"❌ Error Externo: {r.status_code} - {r.text[:200]}")
-              sys.exit(1)
-          with open("base_comparar.xlsx", "wb") as f:
-              f.write(r.content)
-          print(f"   ✅ Externo: {len(r.content):,} bytes")
+          for ruta_sp, nombre_local in archivos.items():
+              print(f"📥 Descargando {nombre_local}...")
+              with open(nombre_local, "wb") as f:
+                  ctx.web.get_file_by_server_relative_url(ruta_sp).download(f).execute_query()
+              print(f"   ✅ {nombre_local} descargado")
           EOF
 
       - name: Ejecutar comparación
@@ -58,22 +54,25 @@ jobs:
 
       - name: Subir resultado a SharePoint
         env:
-          SP_TOKEN:      ${{ secrets.SP_TOKEN }}
-          SP_UPLOAD_URL: ${{ secrets.SP_UPLOAD_URL }}
+          SP_USER: ${{ secrets.SP_USER }}
+          SP_PASS: ${{ secrets.SP_PASS }}
         run: |
           python - <<'EOF'
-          import requests, os, sys
+          import os
+          from office365.sharepoint.client_context import ClientContext
+          from office365.runtime.auth.user_credential import UserCredential
 
-          headers = {
-              "Authorization": f"Bearer {os.environ['SP_TOKEN']}",
-              "Content-Type": "application/octet-stream"
-          }
+          site_url = "https://numar.sharepoint.com/sites/PRODUCTHUB"
+          ctx = ClientContext(site_url).with_credentials(
+              UserCredential(os.environ['SP_USER'], os.environ['SP_PASS'])
+          )
+
+          ruta_destino = "/sites/PRODUCTHUB/Shared Documents/resultado_comparacion.xlsx"
+          
           with open("resultado_comparacion.xlsx", "rb") as f:
-              r = requests.put(os.environ['SP_UPLOAD_URL'], headers=headers, data=f)
+              ctx.web.get_folder_by_server_relative_url(
+                  "/sites/PRODUCTHUB/Shared Documents"
+              ).upload_file("resultado_comparacion.xlsx", f.read()).execute_query()
 
-          if r.status_code in [200, 201]:
-              print(f"✅ Resultado subido correctamente")
-          else:
-              print(f"❌ Error al subir: {r.status_code} - {r.text[:200]}")
-              sys.exit(1)
+          print("✅ resultado_comparacion.xlsx subido a SharePoint")
           EOF
