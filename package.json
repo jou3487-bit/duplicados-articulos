@@ -30,9 +30,19 @@
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "firebase-tools": "^13.8.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3"
+  },
+  "overrides": {
+    "firebase-tools": {
+      "uuid": "8.3.2"
+    },
+    "universal-analytics": {
+      "uuid": "8.3.2"
+    },
+    "uuid": "8.3.2"
   }
 }
