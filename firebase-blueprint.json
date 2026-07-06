@@ -1,0 +1,53 @@
+{
+  "collections": {
+    "classified_items": {
+      "schema": {
+        "properties": {
+          "userId": { "type": "string" },
+          "originalDescription": { "type": "string" },
+          "purchasingCategory": { "type": "string" },
+          "standardizedDescription": { "type": "string" },
+          "brand": { "type": "string" },
+          "partNumber": { "type": "string" },
+          "uom": { "type": "string" },
+          "confidence": { "type": "number" },
+          "explanation": { "type": "string" },
+          "createdAt": { "type": "string" }
+        },
+        "required": [
+          "userId",
+          "originalDescription",
+          "purchasingCategory",
+          "standardizedDescription",
+          "brand",
+          "partNumber",
+          "uom",
+          "confidence",
+          "explanation",
+          "createdAt"
+        ]
+      },
+      "indexes": [
+        {
+          "fields": [
+            { "fieldPath": "userId", "order": "ASCENDING" },
+            { "fieldPath": "createdAt", "order": "DESCENDING" }
+          ]
+        }
+      ]
+    },
+    "user_settings": {
+      "schema": {
+        "properties": {
+          "userId": { "type": "string" },
+          "categories": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "updatedAt": { "type": "string" }
+        },
+        "required": ["userId", "categories", "updatedAt"]
+      }
+    }
+  }
+}
