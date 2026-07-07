@@ -62,6 +62,7 @@ const DEFAULT_CATEGORIES = [
   "EQUIPAMIENTO DE OFICINA Y PAPELERIA",
   "SOPORTE Y SERVICIOS TI",
   "REPUESTOS DE MAQUINARIA PESADA",
+  "REPUESTOS DE MOTOCICLETAS",
   "TUBERIAS Y ACCESORIOS DE CONEXION",
   "PRODUCTOS QUIMICOS Y LUBRICANTES",
   "SERVICIOS GENERALES Y MANTENIMIENTO"
@@ -76,7 +77,8 @@ const SAMPLE_ITEMS = [
   "Llave francesa Bahco ajustable de 10 pulgadas mango cromado",
   "Cartucho de tinta HP 667 XL color tricolor original",
   "Grasa multipropósito Mobilux EP2 balde de 16kg",
-  "Válvula de bola de bronce de 3/4 pulgada NPT marca Giacomini"
+  "Válvula de bola de bronce de 3/4 pulgada NPT marca Giacomini",
+  "Kit de arrastre original para moto Honda XR 150 - N/P: 06401-KRH-305"
 ];
 
 export default function App() {
@@ -430,6 +432,7 @@ REGLAS DE NEGOCIO CRÍTICAS:
 4. Extracción de Atributos: Identifica y extrae limpiamente la Marca (ej. "SKF", "3M", "CATERPILLAR") y el Número de Parte/Modelo si están presentes. Si no se especifican, coloca "GENERICO" para Marca y "N/A" para Número de Parte.
 5. Sugiere la Unidad de Medida (UOM) estándar en Oracle Fusion más lógica (ej. "EACH", "METRO", "CAJA", "JUEGO", "LITRO", "KILOGRAMO").
 6. Genera una breve explicación de 1 o 2 oraciones justificando técnicamente la clasificación en español.
+7. REGLAS CRÍTICA DE NÚMEROS DE PARTE: Si la descripción de un artículo contiene un número de parte (combinaciones de letras y números, códigos de fábrica), NO debes aislarlo ni ignorarlo. Identifica si el artículo es un repuesto técnico (por ejemplo, repuestos de motocicletas). Los números de parte son vitales para mantener la especificidad del artículo; nunca clasifiques un repuesto técnico con número de parte bajo categorías abstractas como "genérico" o "metal". Prioriza su función real (Repuesto / Automotriz / Motocicleta).
 
 Genera la respuesta estrictamente en formato JSON que cumpla exactamente con el esquema especificado, con un elemento por cada artículo consultado en el mismo orden.
 `;
@@ -496,7 +499,10 @@ Genera la respuesta estrictamente en formato JSON que cumpla exactamente con el 
     setIsLoading(true);
     setErrorMessage(null);
     
-    const totalItems = itemsToClassify.length;
+    // Normalize text: convert to uppercase before sending to the IA
+    const normalizedItems = itemsToClassify.map(item => item.toUpperCase());
+    
+    const totalItems = normalizedItems.length;
     setBatchTotal(totalItems);
     setBatchProcessed(0);
     setBatchSuccessCount(0);
@@ -509,7 +515,7 @@ Genera la respuesta estrictamente en formato JSON que cumpla exactamente con el 
     // Prepare chunks
     const chunks: string[][] = [];
     for (let i = 0; i < totalItems; i += CHUNK_SIZE) {
-      chunks.push(itemsToClassify.slice(i, i + CHUNK_SIZE));
+      chunks.push(normalizedItems.slice(i, i + CHUNK_SIZE));
     }
 
     let chunkIndex = 0;

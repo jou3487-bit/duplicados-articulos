@@ -197,13 +197,16 @@ app.post("/api/classify", async (req, res) => {
 
     const ai = getAIClient();
 
+    // Normalize text: convert to uppercase before sending to the IA
+    const uppercaseDescriptions = descriptions.map((desc: any) => String(desc).toUpperCase());
+
     // Prepare prompt
     const prompt = `
 Eres un clasificador experto de Datos Maestros de Artículos para Oracle Fusion Product Hub. 
 Tu única tarea es recibir una lista de descripciones, nombres o sinónimos de artículos de almacén y clasificarlos estrictamente en la "Categoría de Compra" oficial más adecuada según su naturaleza.
 
 LISTA DE ARTÍCULOS A CLASIFICAR:
-${descriptions.map((desc, i) => `${i + 1}. "${desc}"`).join("\n")}
+${uppercaseDescriptions.map((desc, i) => `${i + 1}. "${desc}"`).join("\n")}
 
 CATÁLOGO DE CATEGORÍAS DE COMPRA AUTORIZADAS:
 ${categories.map((cat) => `- ${cat}`).join("\n")}
@@ -218,6 +221,7 @@ REGLAS DE NEGOCIO CRÍTICAS:
 4. Extracción de Atributos: Identifica y extrae limpiamente la Marca (ej. "SKF", "3M", "CATERPILLAR") y el Número de Parte/Modelo si están presentes. Si no se especifican, coloca "GENERICO" para Marca y "N/A" para Número de Parte.
 5. Sugiere la Unidad de Medida (UOM) estándar en Oracle Fusion más lógica (ej. "EACH", "METRO", "CAJA", "JUEGO", "LITRO", "KILOGRAMO").
 6. Genera una breve explicación de 1 o 2 oraciones justificando técnicamente la clasificación en español.
+7. REGLAS CRÍTICA DE NÚMEROS DE PARTE: Si la descripción de un artículo contiene un número de parte (combinaciones de letras y números, códigos de fábrica), NO debes aislarlo ni ignorarlo. Identifica si el artículo es un repuesto técnico (por ejemplo, repuestos de motocicletas). Los números de parte son vitales para mantener la especificidad del artículo; nunca clasifiques un repuesto técnico con número de parte bajo categorías abstractas como "genérico" o "metal". Prioriza su función real (Repuesto / Automotriz / Motocicleta).
 
 Genera la respuesta estrictamente en formato JSON que cumpla exactamente con el esquema especificado, con un elemento por cada artículo consultado en el mismo orden.
 `;
